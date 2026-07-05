@@ -220,3 +220,85 @@ export const transcribeAudio = createServerFn({ method: "POST" })
     const json = (await res.json()) as { text?: string };
     return { text: json.text ?? "" };
   });
+
+export const synthesizeSpeech = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ text: z.string().min(1).max(2000), voice: z.string().default("alloy") }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini-tts",
+        input: data.text,
+        voice: data.voice,
+        response_format: "mp3",
+      }),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`TTS failed: ${res.status} ${t}`);
+    }
+    const buf = new Uint8Array(await res.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    return { audioBase64: btoa(bin), mimeType: "audio/mpeg" };
+  });
+
+export const listFavorites = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("favorite_questions")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+export const addFavorite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        question: z.string().min(1).max(2000),
+        interview_type: z.string().optional(),
+        difficulty: z.string().optional(),
+        interview_id: z.string().uuid().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("favorite_questions").upsert(
+      {
+        user_id: context.userId,
+        question: data.question,
+        interview_type: data.interview_type ?? null,
+        difficulty: data.difficulty ?? null,
+        interview_id: data.interview_id ?? null,
+      },
+      { onConflict: "user_id,question" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const removeFavorite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ question: z.string() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("favorite_questions")
+      .delete()
+      .eq("user_id", context.userId)
+      .eq("question", data.question);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
