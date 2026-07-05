@@ -14,7 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      interviews: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          difficulty: Database["public"]["Enums"]["interview_difficulty"]
+          id: string
+          overall_score: number | null
+          questions: Json
+          status: Database["public"]["Enums"]["interview_status"]
+          type: Database["public"]["Enums"]["interview_type"]
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          difficulty: Database["public"]["Enums"]["interview_difficulty"]
+          id?: string
+          overall_score?: number | null
+          questions?: Json
+          status?: Database["public"]["Enums"]["interview_status"]
+          type: Database["public"]["Enums"]["interview_type"]
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          difficulty?: Database["public"]["Enums"]["interview_difficulty"]
+          id?: string
+          overall_score?: number | null
+          questions?: Json
+          status?: Database["public"]["Enums"]["interview_status"]
+          type?: Database["public"]["Enums"]["interview_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +82,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      interview_difficulty: "Easy" | "Medium" | "Hard"
+      interview_status: "in_progress" | "completed"
+      interview_type: "HR" | "Technical" | "Biotechnology" | "TNPSC"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +211,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      interview_difficulty: ["Easy", "Medium", "Hard"],
+      interview_status: ["in_progress", "completed"],
+      interview_type: ["HR", "Technical", "Biotechnology", "TNPSC"],
+    },
   },
 } as const
