@@ -10,9 +10,13 @@ import {
   submitAnswer,
   completeInterview,
   transcribeAudio,
+  synthesizeSpeech,
+  addFavorite,
+  removeFavorite,
+  listFavorites,
 } from "@/lib/interview.functions";
 import { toast } from "sonner";
-import { Bot, CheckCircle2, Loader2, Mic, MicOff, Send } from "lucide-react";
+import { Bot, CheckCircle2, Loader2, Mic, MicOff, Send, Volume2, Square, Star } from "lucide-react";
 
 type QAItem = {
   question: string;
@@ -33,6 +37,10 @@ function InterviewPage() {
   const submit = useServerFn(submitAnswer);
   const complete = useServerFn(completeInterview);
   const transcribe = useServerFn(transcribeAudio);
+  const speak = useServerFn(synthesizeSpeech);
+  const fav = useServerFn(addFavorite);
+  const unfav = useServerFn(removeFavorite);
+  const fetchFavs = useServerFn(listFavorites);
 
   const [questions, setQuestions] = useState<QAItem[]>([]);
   const [type, setType] = useState("");
@@ -43,31 +51,43 @@ function InterviewPage() {
   const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [favSet, setFavSet] = useState<Set<string>>(new Set());
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const row = await fetchInterview({ data: { id } });
+        const [row, favs] = await Promise.all([
+          fetchInterview({ data: { id } }),
+          fetchFavs().catch(() => []),
+        ]);
         const qs = (row.questions as QAItem[]) ?? [];
         setQuestions(qs);
         setType(row.type);
         setDifficulty(row.difficulty);
         const firstUnanswered = qs.findIndex((q) => !q.answer);
         setIndex(firstUnanswered === -1 ? qs.length - 1 : firstUnanswered);
+        setFavSet(new Set((favs as { question: string }[]).map((f) => f.question)));
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to load interview");
       } finally {
         setLoading(false);
       }
     })();
-  }, [id, fetchInterview]);
+    return () => {
+      audioRef.current?.pause();
+    };
+  }, [id, fetchInterview, fetchFavs]);
 
   const current = questions[index];
   const total = questions.length;
   const answered = questions.filter((q) => q.answer).length;
+  const isFav = current ? favSet.has(current.question) : false;
 
   async function handleSubmit() {
     if (!answer.trim()) return toast.error("Please enter an answer");
@@ -102,9 +122,7 @@ function InterviewPage() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : "audio/mp4";
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const rec = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
       rec.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
@@ -137,6 +155,60 @@ function InterviewPage() {
       setRecording(true);
     } catch {
       toast.error("Could not access microphone");
+    }
+  }
+
+  async function playQuestion() {
+    if (speaking) {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setSpeaking(false);
+      return;
+    }
+    if (!current) return;
+    setTtsLoading(true);
+    try {
+      const res = await speak({ data: { text: current.question, voice: "alloy" } });
+      const audio = new Audio(`data:${res.mimeType};base64,${res.audioBase64}`);
+      audioRef.current = audio;
+      audio.onended = () => setSpeaking(false);
+      audio.onerror = () => setSpeaking(false);
+      await audio.play();
+      setSpeaking(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "TTS failed");
+    } finally {
+      setTtsLoading(false);
+    }
+  }
+
+  async function toggleFavorite() {
+    if (!current) return;
+    const q = current.question;
+    const next = new Set(favSet);
+    try {
+      if (isFav) {
+        next.delete(q);
+        setFavSet(next);
+        await unfav({ data: { question: q } });
+        toast.success("Removed from favorites");
+      } else {
+        next.add(q);
+        setFavSet(next);
+        await fav({
+          data: {
+            question: q,
+            interview_type: type,
+            difficulty,
+            interview_id: id,
+          },
+        });
+        toast.success("Added to favorites");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+      // revert
+      setFavSet(favSet);
     }
   }
 
@@ -179,8 +251,39 @@ function InterviewPage() {
             <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-emerald-glow text-primary-foreground">
               <Bot className="size-5" />
             </div>
-            <div>
-              <div className="text-xs font-medium text-muted-foreground">AI Interviewer</div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-medium text-muted-foreground">AI Interviewer</div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={playQuestion}
+                    disabled={ttsLoading}
+                    aria-label={speaking ? "Stop" : "Read question aloud"}
+                    title={speaking ? "Stop" : "Read question aloud"}
+                  >
+                    {ttsLoading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : speaking ? (
+                      <Square className="size-4" />
+                    ) : (
+                      <Volume2 className="size-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={toggleFavorite}
+                    aria-label={isFav ? "Unfavorite" : "Favorite"}
+                    title={isFav ? "Remove from favorites" : "Save to favorites"}
+                  >
+                    <Star className={`size-4 ${isFav ? "fill-primary text-primary" : ""}`} />
+                  </Button>
+                </div>
+              </div>
               <p className="mt-1 text-lg leading-relaxed">{current.question}</p>
             </div>
           </div>

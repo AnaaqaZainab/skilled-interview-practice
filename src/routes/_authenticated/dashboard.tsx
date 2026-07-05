@@ -1,21 +1,30 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { listInterviews } from "@/lib/interview.functions";
 import { useQuery } from "@tanstack/react-query";
-import { Award, PlayCircle, TrendingUp, Clock, Trophy } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import {
+  Award, PlayCircle, TrendingUp, Clock, Trophy, Search, Flame, Target, Medal, Star as StarIcon,
+} from "lucide-react";
+import { formatDistanceToNow, format } from "date-fns";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from "recharts";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
+type Badge = { key: string; label: string; icon: React.ComponentType<{ className?: string }>; earned: boolean; hint: string };
+
 function Dashboard() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [q, setQ] = useState("");
   const fetchList = useServerFn(listInterviews);
   const { data: interviews = [] } = useQuery({
     queryKey: ["interviews"],
@@ -41,17 +50,47 @@ function Dashboard() {
         ).toFixed(1)
       : "—";
   const recent = interviews[0];
+  const best = completed.reduce((m, i) => Math.max(m, Number(i.overall_score ?? 0)), 0);
+
+  const chartData = useMemo(() => {
+    return [...completed]
+      .reverse()
+      .map((i, idx) => ({
+        name: `#${idx + 1}`,
+        date: format(new Date(i.created_at), "MMM d"),
+        score: Number(i.overall_score ?? 0),
+      }));
+  }, [completed]);
+
+  const badges: Badge[] = [
+    { key: "first", label: "First Steps", icon: PlayCircle, earned: completed.length >= 1, hint: "Complete 1 interview" },
+    { key: "five", label: "Getting Serious", icon: Flame, earned: completed.length >= 5, hint: "Complete 5 interviews" },
+    { key: "ten", label: "Marathoner", icon: Medal, earned: completed.length >= 10, hint: "Complete 10 interviews" },
+    { key: "highscore", label: "Sharpshooter", icon: Target, earned: best >= 8, hint: "Score 8+ in one interview" },
+    { key: "perfect", label: "Ace", icon: Trophy, earned: best >= 9.5, hint: "Score 9.5+ in one interview" },
+    { key: "allTypes", label: "Well-Rounded", icon: StarIcon, earned: new Set(completed.map((c) => c.type)).size >= 4, hint: "Try all 4 interview types" },
+  ];
+
+  const filtered = interviews.filter((i) => {
+    if (!q.trim()) return true;
+    const s = q.toLowerCase();
+    return (
+      i.type.toLowerCase().includes(s) ||
+      i.difficulty.toLowerCase().includes(s) ||
+      i.status.toLowerCase().includes(s)
+    );
+  });
 
   return (
     <AppShell>
       <div>
-        <h1 className="text-3xl font-bold">
+        <h1 className="text-2xl sm:text-3xl font-bold">
           Welcome, <span className="text-primary">{name || "there"}</span>
         </h1>
         <p className="mt-1 text-muted-foreground">Ready to sharpen your interview skills?</p>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <StatCard icon={Trophy} label="Total Interviews" value={String(total)} />
         <StatCard icon={TrendingUp} label="Average Score" value={avg === "—" ? avg : `${avg}/10`} />
         <StatCard
@@ -75,17 +114,78 @@ function Dashboard() {
         )}
       </div>
 
+      <div className="mt-10 grid gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border bg-card p-5 shadow-sm lg:col-span-2">
+          <h2 className="text-lg font-semibold">Progress</h2>
+          <p className="text-xs text-muted-foreground">Score over your last {chartData.length} interviews</p>
+          <div className="mt-4 h-64">
+            {chartData.length === 0 ? (
+              <div className="grid h-full place-items-center text-sm text-muted-foreground">
+                Complete an interview to see your progress.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 10]} fontSize={12} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      color: "var(--card-foreground)",
+                    }}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          <h2 className="text-lg font-semibold">Achievements</h2>
+          <p className="text-xs text-muted-foreground">Earn badges as you practice</p>
+          <ul className="mt-4 grid grid-cols-2 gap-3">
+            {badges.map((b) => (
+              <li
+                key={b.key}
+                title={b.hint}
+                className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-center transition ${
+                  b.earned ? "bg-primary/10 border-primary/40" : "opacity-50"
+                }`}
+              >
+                <b.icon className={`size-6 ${b.earned ? "text-primary" : "text-muted-foreground"}`} />
+                <div className="text-xs font-medium">{b.label}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
       <div className="mt-10">
-        <h2 className="text-lg font-semibold">Recent sessions</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Interview history</h2>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by type, difficulty…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="w-full pl-9 sm:w-72"
+            />
+          </div>
+        </div>
         <div className="mt-3 rounded-2xl border bg-card">
-          {interviews.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              No interviews yet. Start your first one!
+              {interviews.length === 0 ? "No interviews yet. Start your first one!" : "No matching interviews."}
             </div>
           ) : (
             <ul className="divide-y">
-              {interviews.slice(0, 8).map((i) => (
-                <li key={i.id} className="flex items-center justify-between px-5 py-4">
+              {filtered.map((i) => (
+                <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
                   <div>
                     <div className="font-medium">
                       {i.type} · {i.difficulty}
@@ -132,7 +232,7 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+    <div className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
       <div className="flex items-center gap-3">
         <div className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary">
           <Icon className="size-5" />
