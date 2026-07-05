@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      favorite_questions: {
+        Row: {
+          created_at: string
+          difficulty: string | null
+          id: string
+          interview_id: string | null
+          interview_type: string | null
+          question: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          difficulty?: string | null
+          id?: string
+          interview_id?: string | null
+          interview_type?: string | null
+          question: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          difficulty?: string | null
+          id?: string
+          interview_id?: string | null
+          interview_type?: string | null
+          question?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorite_questions_interview_id_fkey"
+            columns: ["interview_id"]
+            isOneToOne: false
+            referencedRelation: "interviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interviews: {
         Row: {
           completed_at: string | null
