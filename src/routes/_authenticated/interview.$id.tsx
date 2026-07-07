@@ -411,9 +411,30 @@ function InterviewPage() {
                   </Button>
                 </div>
               </div>
+              {voiceMetrics && (
+                <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg border border-border/60 bg-muted/30 p-3 text-center text-xs">
+                  <div>
+                    <div className={`text-lg font-bold ${voiceMetrics.wpm < 110 || voiceMetrics.wpm > 170 ? "text-orange-500" : "text-primary"}`}>
+                      {voiceMetrics.wpm}
+                    </div>
+                    <div className="text-muted-foreground">WPM {voiceMetrics.wpm < 110 ? "· slow" : voiceMetrics.wpm > 170 ? "· fast" : "· ideal"}</div>
+                  </div>
+                  <div>
+                    <div className={`text-lg font-bold ${voiceMetrics.fillers > 3 ? "text-orange-500" : "text-primary"}`}>
+                      {voiceMetrics.fillers}
+                    </div>
+                    <div className="text-muted-foreground">Filler words</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-primary">{voiceMetrics.words}</div>
+                    <div className="text-muted-foreground">Words · {voiceMetrics.seconds}s</div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
+
 
         {current.answer && (
           <div className="mt-6 flex justify-end gap-2">
