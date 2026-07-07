@@ -16,7 +16,16 @@ import {
   listFavorites,
 } from "@/lib/interview.functions";
 import { toast } from "sonner";
-import { Bot, CheckCircle2, Loader2, Mic, MicOff, Send, Volume2, Square, Star } from "lucide-react";
+import { Bot, CheckCircle2, Loader2, Mic, MicOff, Send, Volume2, Square, Star, Timer as TimerIcon } from "lucide-react";
+
+const INTERVIEW_DURATION_SEC = 15 * 60;
+const TIMER_STORAGE_PREFIX = "prepsage:deadline:";
+
+function formatTime(sec: number) {
+  const m = Math.floor(Math.max(0, sec) / 60);
+  const s = Math.max(0, sec) % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
 
 type QAItem = {
   question: string;
