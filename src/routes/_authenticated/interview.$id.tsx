@@ -16,7 +16,16 @@ import {
   listFavorites,
 } from "@/lib/interview.functions";
 import { toast } from "sonner";
-import { Bot, CheckCircle2, Loader2, Mic, MicOff, Send, Volume2, Square, Star } from "lucide-react";
+import { Bot, CheckCircle2, Loader2, Mic, MicOff, Send, Volume2, Square, Star, Timer as TimerIcon } from "lucide-react";
+
+const INTERVIEW_DURATION_SEC = 15 * 60;
+const TIMER_STORAGE_PREFIX = "prepsage:deadline:";
+
+function formatTime(sec: number) {
+  const m = Math.floor(Math.max(0, sec) / 60);
+  const s = Math.max(0, sec) % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
 
 type QAItem = {
   question: string;
@@ -54,6 +63,8 @@ function InterviewPage() {
   const [speaking, setSpeaking] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [favSet, setFavSet] = useState<Set<string>>(new Set());
+  const [remaining, setRemaining] = useState<number>(INTERVIEW_DURATION_SEC);
+  const autoSubmittedRef = useRef(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -89,6 +100,40 @@ function InterviewPage() {
   const answered = questions.filter((q) => q.answer).length;
   const isFav = current ? favSet.has(current.question) : false;
 
+  // Countdown timer — persists deadline across refreshes per interview id.
+  useEffect(() => {
+    if (loading) return;
+    const key = TIMER_STORAGE_PREFIX + id;
+    let deadline = Number(localStorage.getItem(key));
+    if (!deadline || Number.isNaN(deadline) || deadline < Date.now()) {
+      deadline = Date.now() + INTERVIEW_DURATION_SEC * 1000;
+      localStorage.setItem(key, String(deadline));
+    }
+    const tick = () => {
+      const secs = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+      setRemaining(secs);
+      if (secs === 0 && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        toast.warning("Time's up — submitting your interview");
+        (async () => {
+          try {
+            if (answer.trim()) {
+              await submit({ data: { id, index, answer: answer.trim() } }).catch(() => {});
+            }
+            await complete({ data: { id } }).catch(() => {});
+          } finally {
+            localStorage.removeItem(key);
+            navigate({ to: "/result/$id", params: { id } });
+          }
+        })();
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [loading, id, index, answer, submit, complete, navigate]);
+
+
   async function handleSubmit() {
     if (!answer.trim()) return toast.error("Please enter an answer");
     setSubmitting(true);
@@ -104,6 +149,7 @@ function InterviewPage() {
         setIndex(index + 1);
       } else {
         const res = await complete({ data: { id } });
+        localStorage.removeItem(TIMER_STORAGE_PREFIX + id);
         toast.success(`Interview complete! Overall: ${res.overall_score}/10`);
         navigate({ to: "/result/$id", params: { id } });
       }
@@ -233,20 +279,32 @@ function InterviewPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+          <div className="min-w-0">
             <div className="text-xs font-medium uppercase tracking-wider text-primary">
               {type} · {difficulty}
             </div>
-            <h1 className="mt-1 text-2xl font-bold">
+            <h1 className="mt-1 truncate text-2xl font-bold">
               Question {index + 1} of {total}
             </h1>
+            <div className="mt-0.5 text-sm text-muted-foreground">{answered} answered</div>
           </div>
-          <div className="text-sm text-muted-foreground">{answered} answered</div>
+          <div
+            className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-mono tabular-nums shadow-sm backdrop-blur ${
+              remaining <= 120
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-border/60 bg-card/70 text-foreground"
+            }`}
+            aria-label="Time remaining"
+          >
+            <TimerIcon className="size-4" />
+            {formatTime(remaining)}
+          </div>
         </div>
         <Progress value={((index + 1) / total) * 100} className="mt-4" />
 
-        <div className="mt-8 rounded-2xl border bg-card p-6 shadow-sm">
+        <div className="mt-8 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-sm backdrop-blur-xl transition-shadow hover:shadow-md">
+
           <div className="flex items-start gap-3">
             <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-emerald-glow text-primary-foreground">
               <Bot className="size-5" />
