@@ -149,6 +149,7 @@ function InterviewPage() {
         setIndex(index + 1);
       } else {
         const res = await complete({ data: { id } });
+        localStorage.removeItem(TIMER_STORAGE_PREFIX + id);
         toast.success(`Interview complete! Overall: ${res.overall_score}/10`);
         navigate({ to: "/result/$id", params: { id } });
       }
