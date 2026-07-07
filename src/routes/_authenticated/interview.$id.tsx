@@ -279,20 +279,32 @@ function InterviewPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+          <div className="min-w-0">
             <div className="text-xs font-medium uppercase tracking-wider text-primary">
               {type} · {difficulty}
             </div>
-            <h1 className="mt-1 text-2xl font-bold">
+            <h1 className="mt-1 truncate text-2xl font-bold">
               Question {index + 1} of {total}
             </h1>
+            <div className="mt-0.5 text-sm text-muted-foreground">{answered} answered</div>
           </div>
-          <div className="text-sm text-muted-foreground">{answered} answered</div>
+          <div
+            className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-mono tabular-nums shadow-sm backdrop-blur ${
+              remaining <= 120
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-border/60 bg-card/70 text-foreground"
+            }`}
+            aria-label="Time remaining"
+          >
+            <TimerIcon className="size-4" />
+            {formatTime(remaining)}
+          </div>
         </div>
         <Progress value={((index + 1) / total) * 100} className="mt-4" />
 
-        <div className="mt-8 rounded-2xl border bg-card p-6 shadow-sm">
+        <div className="mt-8 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-sm backdrop-blur-xl transition-shadow hover:shadow-md">
+
           <div className="flex items-start gap-3">
             <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-emerald-glow text-primary-foreground">
               <Bot className="size-5" />
