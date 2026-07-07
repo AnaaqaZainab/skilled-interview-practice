@@ -100,6 +100,40 @@ function InterviewPage() {
   const answered = questions.filter((q) => q.answer).length;
   const isFav = current ? favSet.has(current.question) : false;
 
+  // Countdown timer — persists deadline across refreshes per interview id.
+  useEffect(() => {
+    if (loading) return;
+    const key = TIMER_STORAGE_PREFIX + id;
+    let deadline = Number(localStorage.getItem(key));
+    if (!deadline || Number.isNaN(deadline) || deadline < Date.now()) {
+      deadline = Date.now() + INTERVIEW_DURATION_SEC * 1000;
+      localStorage.setItem(key, String(deadline));
+    }
+    const tick = () => {
+      const secs = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+      setRemaining(secs);
+      if (secs === 0 && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        toast.warning("Time's up — submitting your interview");
+        (async () => {
+          try {
+            if (answer.trim()) {
+              await submit({ data: { id, index, answer: answer.trim() } }).catch(() => {});
+            }
+            await complete({ data: { id } }).catch(() => {});
+          } finally {
+            localStorage.removeItem(key);
+            navigate({ to: "/result/$id", params: { id } });
+          }
+        })();
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [loading, id, index, answer, submit, complete, navigate]);
+
+
   async function handleSubmit() {
     if (!answer.trim()) return toast.error("Please enter an answer");
     setSubmitting(true);
