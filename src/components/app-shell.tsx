@@ -1,9 +1,16 @@
 import { Link } from "@tanstack/react-router";
-import { Brain, LogOut, Star } from "lucide-react";
+import { Brain, LogOut, Star, Sparkles, Compass, Map } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { ReactNode } from "react";
+
+const NAV: { to: "/coach" | "/chat" | "/favorites" | "/roadmap"; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { to: "/coach", label: "Coach", icon: Compass },
+  { to: "/chat", label: "Mentor", icon: Sparkles },
+  { to: "/favorites", label: "Favorites", icon: Star },
+  { to: "/roadmap", label: "Roadmap", icon: Map },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -17,16 +24,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="text-lg font-semibold">PrepSage</span>
           </Link>
           <div className="flex items-center gap-1 sm:gap-2">
-            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
-              <Link to="/favorites">
-                <Star className="mr-2 size-4" /> Favorites
-              </Link>
-            </Button>
-            <Button variant="ghost" size="icon" asChild className="sm:hidden size-9" aria-label="Favorites">
-              <Link to="/favorites">
-                <Star className="size-4" />
-              </Link>
-            </Button>
+            {NAV.map((n) => (
+              <div key={n.to}>
+                <Button variant="ghost" size="sm" asChild className="hidden md:inline-flex">
+                  <Link to={n.to}>
+                    <n.icon className="mr-2 size-4" /> {n.label}
+                  </Link>
+                </Button>
+                <Button variant="ghost" size="icon" asChild className="md:hidden size-9" aria-label={n.label}>
+                  <Link to={n.to}>
+                    <n.icon className="size-4" />
+                  </Link>
+                </Button>
+              </div>
+            ))}
             <ThemeToggle />
             <Button
               variant="ghost"
@@ -46,3 +57,4 @@ export function AppShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+

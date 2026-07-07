@@ -8,12 +8,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { listInterviews } from "@/lib/interview.functions";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Award, PlayCircle, TrendingUp, Clock, Trophy, Search, Flame, Target, Medal, Star as StarIcon,
+  Award, PlayCircle, TrendingUp, Clock, Trophy, Search, Flame, Target, Medal, Star as StarIcon, Zap,
 } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, startOfDay, subDays, isSameDay } from "date-fns";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
+
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -62,6 +64,40 @@ function Dashboard() {
       }));
   }, [completed]);
 
+  // XP & Level: 100 XP per completed interview + score*10 bonus
+  const xp = completed.reduce((a, i) => a + 100 + Math.round(Number(i.overall_score ?? 0) * 10), 0);
+  const level = Math.max(1, Math.floor(xp / 500) + 1);
+  const xpInLevel = xp % 500;
+  const xpPct = (xpInLevel / 500) * 100;
+
+  // Streak: consecutive days ending today (or yesterday) with at least one interview
+  const { streak, streakDays } = useMemo(() => {
+    const days = new Set(completed.map((c) => startOfDay(new Date(c.created_at)).getTime()));
+    let s = 0;
+    for (let i = 0; i < 90; i++) {
+      const d = startOfDay(subDays(new Date(), i)).getTime();
+      if (days.has(d)) s++;
+      else if (i > 0) break; // allow today gap
+    }
+    const last30 = Array.from({ length: 30 }).map((_, i) => {
+      const d = subDays(new Date(), 29 - i);
+      return { date: d, active: days.has(startOfDay(d).getTime()) };
+    });
+    return { streak: s, streakDays: last30 };
+  }, [completed]);
+
+  // Radar: average score per type
+  const radarData = useMemo(() => {
+    const types = ["HR", "Technical", "Biotechnology", "TNPSC"];
+    return types.map((t) => {
+      const rows = completed.filter((c) => c.type === t);
+      const avgT = rows.length
+        ? rows.reduce((a, r) => a + Number(r.overall_score ?? 0), 0) / rows.length
+        : 0;
+      return { type: t, score: Number(avgT.toFixed(2)) };
+    });
+  }, [completed]);
+
   const badges: Badge[] = [
     { key: "first", label: "First Steps", icon: PlayCircle, earned: completed.length >= 1, hint: "Complete 1 interview" },
     { key: "five", label: "Getting Serious", icon: Flame, earned: completed.length >= 5, hint: "Complete 5 interviews" },
@@ -69,7 +105,11 @@ function Dashboard() {
     { key: "highscore", label: "Sharpshooter", icon: Target, earned: best >= 8, hint: "Score 8+ in one interview" },
     { key: "perfect", label: "Ace", icon: Trophy, earned: best >= 9.5, hint: "Score 9.5+ in one interview" },
     { key: "allTypes", label: "Well-Rounded", icon: StarIcon, earned: new Set(completed.map((c) => c.type)).size >= 4, hint: "Try all 4 interview types" },
+    { key: "streak3", label: "On Fire", icon: Flame, earned: streak >= 3, hint: "3-day practice streak" },
+    { key: "streak7", label: "Unstoppable", icon: Zap, earned: streak >= 7, hint: "7-day practice streak" },
   ];
+
+
 
   const filtered = interviews.filter((i) => {
     if (!q.trim()) return true;
@@ -163,6 +203,74 @@ function Dashboard() {
           </ul>
         </div>
       </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-lg bg-emerald-glow text-primary-foreground">
+              <Zap className="size-5" />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Level</div>
+              <div className="text-2xl font-bold">Lv {level}</div>
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{xpInLevel} XP</span>
+              <span>{500 - xpInLevel} to Lv {level + 1}</span>
+            </div>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full bg-emerald-glow transition-all" style={{ width: `${xpPct}%` }} />
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">Total {xp} XP earned</div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-lg bg-orange-500/15 text-orange-500">
+              <Flame className="size-5" />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Practice streak</div>
+              <div className="text-2xl font-bold">{streak} day{streak === 1 ? "" : "s"}</div>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-15 gap-1" style={{ gridTemplateColumns: "repeat(15, minmax(0, 1fr))" }}>
+            {streakDays.map((d, i) => (
+              <div
+                key={i}
+                title={format(d.date, "MMM d")}
+                className={`aspect-square rounded-sm ${
+                  d.active
+                    ? isSameDay(d.date, new Date())
+                      ? "bg-primary ring-2 ring-primary/30"
+                      : "bg-primary/70"
+                    : "bg-muted"
+                }`}
+              />
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-muted-foreground">Last 30 days</div>
+        </div>
+
+        <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          <h2 className="text-lg font-semibold">Skill Radar</h2>
+          <p className="text-xs text-muted-foreground">Average score by category</p>
+          <div className="mt-2 h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={radarData} outerRadius="70%">
+                <PolarGrid stroke="var(--border)" />
+                <PolarAngleAxis dataKey="type" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={false} axisLine={false} />
+                <Radar dataKey="score" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.35} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
 
       <div className="mt-10">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -69,6 +69,10 @@ function InterviewPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recordStartRef = useRef<number>(0);
+  const [voiceMetrics, setVoiceMetrics] = useState<
+    { wpm: number; fillers: number; words: number; seconds: number } | null
+  >(null);
 
   useEffect(() => {
     (async () => {
@@ -188,7 +192,15 @@ function InterviewPage() {
               .join(""),
           );
           const res = await transcribe({ data: { audioBase64: base64, mimeType } });
-          setAnswer((prev) => (prev ? prev + " " : "") + (res.text ?? ""));
+          const text = res.text ?? "";
+          setAnswer((prev) => (prev ? prev + " " : "") + text);
+          // Voice metrics: WPM + filler count
+          const seconds = Math.max(1, Math.round((Date.now() - recordStartRef.current) / 1000));
+          const words = text.trim().split(/\s+/).filter(Boolean).length;
+          const fillerRe = /\b(um+|uh+|erm+|like|you know|basically|actually|literally|so+)\b/gi;
+          const fillers = (text.match(fillerRe) ?? []).length;
+          const wpm = Math.round((words / seconds) * 60);
+          setVoiceMetrics({ wpm, fillers, words, seconds });
           toast.success("Transcribed");
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Transcription failed");
@@ -197,6 +209,7 @@ function InterviewPage() {
         }
       };
       mediaRecorderRef.current = rec;
+      recordStartRef.current = Date.now();
       rec.start();
       setRecording(true);
     } catch {

@@ -302,3 +302,124 @@ export const removeFavorite = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ============================================================
+// AI Smart Features: Summary, Coach, Mentor Chat
+// ============================================================
+
+export const generateSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: row, error } = await context.supabase
+      .from("interviews")
+      .select("questions,type,difficulty,overall_score")
+      .eq("id", data.id)
+      .single();
+    if (error) throw new Error(error.message);
+    const qs = (row.questions as QAItem[]) ?? [];
+    const transcript = qs
+      .map(
+        (q, i) =>
+          `Q${i + 1}: ${q.question}\nA: ${q.answer ?? "(no answer)"}\nScore: ${q.score ?? "-"}/10\nFeedback: ${q.feedback ?? "-"}`,
+      )
+      .join("\n\n");
+
+    const prompt = `You are an expert career coach reviewing a completed ${row.type} (${row.difficulty}) mock interview scoring ${row.overall_score}/10.
+
+Transcript:
+${transcript}
+
+Write a concise performance report in markdown with these sections:
+## Overall Impression
+## Key Strengths (bullet points)
+## Areas to Improve (bullet points)
+## Recommended Next Steps (3 concrete actions)
+
+Keep it under 300 words, be specific to what the candidate actually said.`;
+
+    const gateway = getGateway();
+    const { text } = await generateText({ model: gateway(MODEL), prompt });
+    return { summary: text };
+  });
+
+export const careerCoach = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("interviews")
+      .select("type,difficulty,overall_score,questions,created_at")
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw new Error(error.message);
+
+    if (!rows || rows.length === 0) {
+      return {
+        markdown:
+          "## Welcome!\n\nComplete at least one interview and come back — I'll analyze your answers and build a personalized career plan for you.",
+      };
+    }
+
+    const digest = rows
+      .map((r, i) => {
+        const qs = (r.questions as QAItem[]) ?? [];
+        const weak = qs
+          .filter((q) => typeof q.score === "number" && (q.score ?? 10) < 7)
+          .slice(0, 2)
+          .map((q) => `    - Weak (${q.score}/10): ${q.question}`)
+          .join("\n");
+        return `Interview ${i + 1} — ${r.type}/${r.difficulty} — Overall ${r.overall_score}/10\n${weak}`;
+      })
+      .join("\n\n");
+
+    const prompt = `You are a personal AI career coach. Based on the candidate's recent interview history below, produce a personalized markdown report with these sections:
+
+## Skill Gap Analysis
+Identify 3-5 concrete weak areas across their answers.
+
+## Personalized Study Plan (Next 2 Weeks)
+Give a day-by-day plan (Week 1 & Week 2) with specific topics and practice tasks.
+
+## Career Guidance
+2-3 paragraphs of encouragement + strategic direction based on the interview types they choose.
+
+Data:
+${digest}
+
+Keep total under 500 words. Be specific and actionable.`;
+
+    const gateway = getGateway();
+    const { text } = await generateText({ model: gateway(MODEL), prompt });
+    return { markdown: text };
+  });
+
+export const mentorChat = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        messages: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string().min(1).max(4000),
+            }),
+          )
+          .min(1)
+          .max(40),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const gateway = getGateway();
+    const system =
+      "You are PrepSage Mentor — a warm, encouraging 24/7 interview coach. Give concise, actionable advice for interview prep (HR, Technical, Biotech, TNPSC). Use markdown lists when helpful. Ask a clarifying question if the user's request is vague.";
+    const { text } = await generateText({
+      model: gateway(MODEL),
+      system,
+      messages: data.messages,
+    });
+    return { reply: text };
+  });
+
