@@ -63,6 +63,8 @@ function InterviewPage() {
   const [speaking, setSpeaking] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [favSet, setFavSet] = useState<Set<string>>(new Set());
+  const [remaining, setRemaining] = useState<number>(INTERVIEW_DURATION_SEC);
+  const autoSubmittedRef = useRef(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
