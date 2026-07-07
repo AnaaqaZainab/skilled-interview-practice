@@ -8,10 +8,13 @@ import {
   listFavorites,
   addFavorite,
   removeFavorite,
+  generateSummary,
 } from "@/lib/interview.functions";
 import { toast } from "sonner";
-import { Award, Download, Loader2, PlayCircle, Star } from "lucide-react";
+import { Award, Download, Loader2, PlayCircle, Sparkles, Star } from "lucide-react";
 import jsPDF from "jspdf";
+import ReactMarkdown from "react-markdown";
+
 
 type QAItem = {
   question: string;
@@ -31,6 +34,7 @@ function ResultPage() {
   const fetchFavs = useServerFn(listFavorites);
   const fav = useServerFn(addFavorite);
   const unfav = useServerFn(removeFavorite);
+  const summarize = useServerFn(generateSummary);
   const [row, setRow] = useState<{
     type: string;
     difficulty: string;
@@ -39,6 +43,21 @@ function ResultPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [favSet, setFavSet] = useState<Set<string>>(new Set());
+  const [summary, setSummary] = useState<string>("");
+  const [summarizing, setSummarizing] = useState(false);
+
+  async function loadSummary() {
+    setSummarizing(true);
+    try {
+      const res = await summarize({ data: { id } });
+      setSummary(res.summary);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate summary");
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
 
   useEffect(() => {
     (async () => {
@@ -183,6 +202,35 @@ function ResultPage() {
             </Button>
           </div>
         </div>
+
+        <div className="mt-6 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-sm backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" />
+              <h2 className="text-lg font-semibold">AI Performance Report</h2>
+            </div>
+            {!summary && (
+              <Button size="sm" onClick={loadSummary} disabled={summarizing}>
+                {summarizing ? (
+                  <><Loader2 className="mr-2 size-4 animate-spin" /> Generating…</>
+                ) : (
+                  <><Sparkles className="mr-2 size-4" /> Generate</>
+                )}
+              </Button>
+            )}
+          </div>
+          {summary ? (
+            <div className="prose prose-sm dark:prose-invert mt-4 max-w-none prose-headings:text-primary">
+              <ReactMarkdown>{summary}</ReactMarkdown>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Get an AI-written overall report with your strengths, weaknesses, and next steps.
+            </p>
+          )}
+        </div>
+
+
 
         <div className="mt-8 space-y-4">
           {row.questions.map((q, i) => {

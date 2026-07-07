@@ -69,6 +69,10 @@ function InterviewPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recordStartRef = useRef<number>(0);
+  const [voiceMetrics, setVoiceMetrics] = useState<
+    { wpm: number; fillers: number; words: number; seconds: number } | null
+  >(null);
 
   useEffect(() => {
     (async () => {
@@ -188,7 +192,15 @@ function InterviewPage() {
               .join(""),
           );
           const res = await transcribe({ data: { audioBase64: base64, mimeType } });
-          setAnswer((prev) => (prev ? prev + " " : "") + (res.text ?? ""));
+          const text = res.text ?? "";
+          setAnswer((prev) => (prev ? prev + " " : "") + text);
+          // Voice metrics: WPM + filler count
+          const seconds = Math.max(1, Math.round((Date.now() - recordStartRef.current) / 1000));
+          const words = text.trim().split(/\s+/).filter(Boolean).length;
+          const fillerRe = /\b(um+|uh+|erm+|like|you know|basically|actually|literally|so+)\b/gi;
+          const fillers = (text.match(fillerRe) ?? []).length;
+          const wpm = Math.round((words / seconds) * 60);
+          setVoiceMetrics({ wpm, fillers, words, seconds });
           toast.success("Transcribed");
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Transcription failed");
@@ -197,6 +209,7 @@ function InterviewPage() {
         }
       };
       mediaRecorderRef.current = rec;
+      recordStartRef.current = Date.now();
       rec.start();
       setRecording(true);
     } catch {
@@ -398,9 +411,30 @@ function InterviewPage() {
                   </Button>
                 </div>
               </div>
+              {voiceMetrics && (
+                <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg border border-border/60 bg-muted/30 p-3 text-center text-xs">
+                  <div>
+                    <div className={`text-lg font-bold ${voiceMetrics.wpm < 110 || voiceMetrics.wpm > 170 ? "text-orange-500" : "text-primary"}`}>
+                      {voiceMetrics.wpm}
+                    </div>
+                    <div className="text-muted-foreground">WPM {voiceMetrics.wpm < 110 ? "· slow" : voiceMetrics.wpm > 170 ? "· fast" : "· ideal"}</div>
+                  </div>
+                  <div>
+                    <div className={`text-lg font-bold ${voiceMetrics.fillers > 3 ? "text-orange-500" : "text-primary"}`}>
+                      {voiceMetrics.fillers}
+                    </div>
+                    <div className="text-muted-foreground">Filler words</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-primary">{voiceMetrics.words}</div>
+                    <div className="text-muted-foreground">Words · {voiceMetrics.seconds}s</div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
+
 
         {current.answer && (
           <div className="mt-6 flex justify-end gap-2">
