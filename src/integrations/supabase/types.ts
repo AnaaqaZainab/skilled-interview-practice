@@ -112,6 +112,33 @@ export type Database = {
         }
         Relationships: []
       }
+      resumes: {
+        Row: {
+          analysis: Json | null
+          created_at: string
+          filename: string
+          id: string
+          parsed_text: string
+          user_id: string
+        }
+        Insert: {
+          analysis?: Json | null
+          created_at?: string
+          filename: string
+          id?: string
+          parsed_text: string
+          user_id: string
+        }
+        Update: {
+          analysis?: Json | null
+          created_at?: string
+          filename?: string
+          id?: string
+          parsed_text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
