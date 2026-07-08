@@ -212,8 +212,17 @@ function InterviewPage() {
       recordStartRef.current = Date.now();
       rec.start();
       setRecording(true);
-    } catch {
-      toast.error("Could not access microphone");
+    } catch (err) {
+      const e = err as DOMException;
+      if (e?.name === "NotAllowedError" || e?.name === "SecurityError") {
+        toast.error("Microphone blocked. Click the 🔒/🎤 icon in your browser's address bar and allow microphone, then try again.");
+      } else if (e?.name === "NotFoundError" || e?.name === "OverconstrainedError") {
+        toast.error("No microphone detected. Connect a mic and try again.");
+      } else if (!window.isSecureContext) {
+        toast.error("Microphone requires HTTPS. Open the published site to record.");
+      } else {
+        toast.error(`Could not access microphone: ${e?.message ?? "unknown error"}`);
+      }
     }
   }
 
