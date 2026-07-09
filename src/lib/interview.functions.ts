@@ -37,12 +37,20 @@ export const createInterview = createServerFn({ method: "POST" })
       .object({
         type: z.enum(["HR", "Technical", "Biotechnology", "TNPSC"]),
         difficulty: z.enum(["Easy", "Medium", "Hard"]),
+        language: z.string().min(2).max(40).default("English"),
+        company: z.string().max(80).optional(),
+        role: z.string().max(120).optional(),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
     const gateway = getGateway();
-    const prompt = `You are an interview generator. Create exactly 5 concise ${data.difficulty} difficulty interview questions for a ${data.type} interview. Return ONLY a JSON array of strings, e.g. ["Q1","Q2","Q3","Q4","Q5"]. No explanations, no numbering.`;
+    const companyLine = data.company
+      ? `The interview is specifically for a ${data.role ?? "candidate"} role at ${data.company}. Tailor questions to that company's known interview style, tech stack, products, and culture.`
+      : "";
+    const prompt = `You are an interview generator. Create exactly 5 concise ${data.difficulty} difficulty ${data.type} interview questions.
+${companyLine}
+Write every question in ${data.language}. Return ONLY a JSON array of strings, e.g. ["Q1","Q2","Q3","Q4","Q5"]. No explanations, no numbering.`;
 
     const { text } = await generateText({
       model: gateway(MODEL),
@@ -106,6 +114,7 @@ export const submitAnswer = createServerFn({ method: "POST" })
         id: z.string().uuid(),
         index: z.number().int().min(0).max(20),
         answer: z.string().min(1).max(5000),
+        language: z.string().min(2).max(40).default("English"),
       })
       .parse(d),
   )
@@ -127,7 +136,7 @@ export const submitAnswer = createServerFn({ method: "POST" })
 Question: ${item.question}
 Candidate's answer: ${data.answer}
 
-Return ONLY a JSON object of the form:
+Write feedback and suggestions in ${data.language}. Return ONLY a JSON object of the form:
 {"score": <0-10 integer>, "feedback": "<2-3 sentences of specific feedback>", "suggestions": "<1-2 concrete suggestions to improve>"}`;
 
     const { text } = await generateText({ model: gateway(MODEL), prompt });
