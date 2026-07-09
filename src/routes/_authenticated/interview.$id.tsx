@@ -142,7 +142,8 @@ function InterviewPage() {
     if (!answer.trim()) return toast.error("Please enter an answer");
     setSubmitting(true);
     try {
-      const updated = await submit({ data: { id, index, answer: answer.trim() } });
+      const language = typeof window !== "undefined" ? localStorage.getItem("prepsage:lang") ?? "English" : "English";
+      const updated = await submit({ data: { id, index, answer: answer.trim(), language } });
       const newQs = [...questions];
       newQs[index] = updated as QAItem;
       setQuestions(newQs);
