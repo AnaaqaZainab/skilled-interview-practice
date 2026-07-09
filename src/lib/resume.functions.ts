@@ -226,6 +226,63 @@ ${parsed.slice(0, 15000)}
     return { id: iv.id as string };
   });
 
+export type BuiltResume = {
+  name: string;
+  title: string;
+  contact: { email?: string; phone?: string; location?: string; links?: string[] };
+  summary: string;
+  skills: Array<{ group: string; items: string[] }>;
+  experience: Array<{
+    role: string;
+    company: string;
+    location?: string;
+    start: string;
+    end: string;
+    bullets: string[];
+  }>;
+  projects: Array<{ name: string; description: string; tech: string[]; link?: string }>;
+  education: Array<{ degree: string; school: string; year: string; details?: string }>;
+  certifications: string[];
+};
+
+function resumeToMarkdown(r: BuiltResume): string {
+  const contactBits = [r.contact.email, r.contact.phone, r.contact.location, ...(r.contact.links ?? [])].filter(Boolean);
+  const lines: string[] = [];
+  lines.push(`# ${r.name}`);
+  if (r.title) lines.push(`_${r.title}_`);
+  if (contactBits.length) lines.push(contactBits.join(" · "));
+  if (r.summary) { lines.push("", "## Professional Summary", r.summary); }
+  if (r.skills?.length) {
+    lines.push("", "## Skills");
+    r.skills.forEach((s) => lines.push(`- **${s.group}:** ${s.items.join(", ")}`));
+  }
+  if (r.experience?.length) {
+    lines.push("", "## Experience");
+    r.experience.forEach((e) => {
+      lines.push(`**${e.role} — ${e.company}** _(${e.start} – ${e.end})_${e.location ? ` · ${e.location}` : ""}`);
+      e.bullets.forEach((b) => lines.push(`- ${b}`));
+      lines.push("");
+    });
+  }
+  if (r.projects?.length) {
+    lines.push("## Projects");
+    r.projects.forEach((p) => {
+      lines.push(`**${p.name}** — ${p.description}${p.tech?.length ? ` _(${p.tech.join(", ")})_` : ""}${p.link ? ` — ${p.link}` : ""}`);
+    });
+    lines.push("");
+  }
+  if (r.education?.length) {
+    lines.push("## Education");
+    r.education.forEach((ed) => lines.push(`**${ed.degree}** — ${ed.school} _(${ed.year})_${ed.details ? ` · ${ed.details}` : ""}`));
+    lines.push("");
+  }
+  if (r.certifications?.length) {
+    lines.push("## Certifications");
+    r.certifications.forEach((c) => lines.push(`- ${c}`));
+  }
+  return lines.join("\n");
+}
+
 export const buildResume = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -234,43 +291,57 @@ export const buildResume = createServerFn({ method: "POST" })
         name: z.string().min(1).max(200),
         email: z.string().max(200).optional(),
         phone: z.string().max(50).optional(),
+        location: z.string().max(200).optional(),
+        links: z.string().max(500).optional(),
         targetRole: z.string().min(1).max(200),
         summary: z.string().max(2000).optional(),
         skills: z.string().max(2000).optional(),
         experience: z.string().max(5000).optional(),
         projects: z.string().max(5000).optional(),
         education: z.string().max(2000).optional(),
+        certifications: z.string().max(1000).optional(),
+        tone: z.enum(["Impactful", "Formal", "Concise", "Creative"]).default("Impactful"),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
     const gateway = getGateway();
-    const prompt = `You are a professional resume writer. Build a clean, ATS-friendly resume in Markdown for the candidate below applying for: ${data.targetRole}.
+    const prompt = `You are an elite technical resume writer and ATS specialist. Build a polished, ATS-friendly resume for a "${data.targetRole}" role. Voice: ${data.tone}.
 
-Use this structure:
-# {Name}
-{contact line}
+Rules:
+- Rewrite every bullet using strong action verbs and QUANTIFY impact (%, $, users, latency, throughput) when the candidate's input allows it. Never invent numbers or facts.
+- Weave in role-relevant keywords naturally so ATS parsers rank it high.
+- Keep bullets tight (max ~24 words), start with a verb, no first-person pronouns.
+- Group skills into 3-6 sensible categories (e.g. Languages, Frameworks, Cloud, Tools).
+- Infer sensible dates from the candidate's text if given; otherwise leave as "Present" / "".
 
-## Professional Summary
-{2-3 sentences}
-
-## Skills
-{grouped bullet list}
-
-## Experience
-{for each role: **Role — Company** _(dates)_ then 3-5 impact bullets with metrics}
-
-## Projects
-{for each: **Name** — short description with tech and outcome}
-
-## Education
-{degrees}
-
-Rewrite everything the candidate provides — sharper verbs, quantify impact, weave in keywords for the target role. Do NOT invent facts. Return ONLY markdown.
+Return ONLY a JSON object with this EXACT shape (no markdown, no commentary):
+{
+  "name": "",
+  "title": "<the target role, or a tighter title>",
+  "contact": { "email": "", "phone": "", "location": "", "links": ["github/…","linkedin/…"] },
+  "summary": "<2-3 sentence value-driven summary>",
+  "skills": [ { "group": "Languages", "items": ["…"] } ],
+  "experience": [ { "role": "", "company": "", "location": "", "start": "", "end": "", "bullets": ["…"] } ],
+  "projects":   [ { "name": "", "description": "", "tech": ["…"], "link": "" } ],
+  "education":  [ { "degree": "", "school": "", "year": "", "details": "" } ],
+  "certifications": ["…"]
+}
 
 Candidate raw input:
 ${JSON.stringify(data, null, 2)}`;
 
     const { text } = await generateText({ model: gateway(MODEL), prompt });
-    return { markdown: text };
+    const resume = await safeJson<BuiltResume>(text, {
+      name: data.name,
+      title: data.targetRole,
+      contact: { email: data.email, phone: data.phone, location: data.location },
+      summary: data.summary ?? "",
+      skills: [],
+      experience: [],
+      projects: [],
+      education: [],
+      certifications: [],
+    });
+    return { resume, markdown: resumeToMarkdown(resume) };
   });
