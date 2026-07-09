@@ -17,6 +17,23 @@ import { Loader2, PlayCircle } from "lucide-react";
 
 const TYPES = ["HR", "Technical", "Biotechnology", "TNPSC"] as const;
 const DIFFS = ["Easy", "Medium", "Hard"] as const;
+export const LANGUAGES = [
+  "English",
+  "Hindi",
+  "Tamil",
+  "Telugu",
+  "Bengali",
+  "Marathi",
+  "Kannada",
+  "Malayalam",
+  "Spanish",
+  "French",
+  "German",
+  "Portuguese",
+  "Arabic",
+  "Mandarin Chinese",
+  "Japanese",
+] as const;
 
 export const Route = createFileRoute("/_authenticated/setup")({
   component: Setup,
@@ -26,13 +43,17 @@ function Setup() {
   const navigate = useNavigate();
   const [type, setType] = useState<(typeof TYPES)[number]>("HR");
   const [difficulty, setDifficulty] = useState<(typeof DIFFS)[number]>("Medium");
+  const [language, setLanguage] = useState<string>(
+    typeof window !== "undefined" ? localStorage.getItem("prepsage:lang") ?? "English" : "English",
+  );
   const [loading, setLoading] = useState(false);
   const create = useServerFn(createInterview);
 
   async function start() {
     setLoading(true);
     try {
-      const res = await create({ data: { type, difficulty } });
+      localStorage.setItem("prepsage:lang", language);
+      const res = await create({ data: { type, difficulty, language } });
       navigate({ to: "/interview/$id", params: { id: res.id } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create interview");
@@ -45,7 +66,7 @@ function Setup() {
     <AppShell>
       <div className="mx-auto max-w-xl">
         <h1 className="text-3xl font-bold">Set up your interview</h1>
-        <p className="mt-1 text-muted-foreground">Pick the type and difficulty. Then hit start.</p>
+        <p className="mt-1 text-muted-foreground">Pick the type, difficulty, and language.</p>
 
         <div className="mt-8 rounded-2xl border bg-card p-6 shadow-sm">
           <div className="space-y-5">
@@ -63,6 +84,24 @@ function Setup() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Language</Label>
+              <Select value={language} onValueChange={setLanguage}>
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((l) => (
+                    <SelectItem key={l} value={l}>
+                      {l}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Questions and feedback will be delivered in this language.
+              </p>
             </div>
             <div>
               <Label>Difficulty</Label>

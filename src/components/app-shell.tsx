@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Brain, LogOut, Star, Sparkles, Compass, Map, FileText } from "lucide-react";
+import { Brain, LogOut, Star, Sparkles, Compass, Map, FileText, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { ReactNode } from "react";
 
-const NAV: { to: "/resume" | "/coach" | "/chat" | "/favorites" | "/roadmap"; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const NAV: { to: "/resume" | "/company" | "/coach" | "/chat" | "/favorites" | "/roadmap"; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { to: "/company", label: "Companies", icon: Building2 },
   { to: "/resume", label: "Resume", icon: FileText },
   { to: "/coach", label: "Coach", icon: Compass },
   { to: "/chat", label: "Mentor", icon: Sparkles },
