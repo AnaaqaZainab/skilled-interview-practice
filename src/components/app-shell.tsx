@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router";
-import { Brain, LogOut, Star, Sparkles, Compass, Map, FileText, Building2 } from "lucide-react";
+import { Brain, LogOut, Star, Sparkles, Compass, Map, FileText, Building2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { ReactNode } from "react";
 
-const NAV: { to: "/resume" | "/company" | "/coach" | "/chat" | "/favorites" | "/roadmap"; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const NAV: { to: "/resume" | "/company" | "/coach" | "/chat" | "/favorites" | "/roadmap" | "/video"; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { to: "/company", label: "Companies", icon: Building2 },
   { to: "/resume", label: "Resume", icon: FileText },
+  { to: "/video", label: "Video", icon: Video },
   { to: "/coach", label: "Coach", icon: Compass },
   { to: "/chat", label: "Mentor", icon: Sparkles },
   { to: "/favorites", label: "Favorites", icon: Star },
